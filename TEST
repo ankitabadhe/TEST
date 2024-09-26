@@ -1,0 +1,96 @@
+import time
+import pymssql
+import subprocess
+from datetime import datetime
+import pytz
+
+# SQL connection config
+sql_config = {
+    'server': 'AM',
+    'user': '123',
+    'password': 'ep',
+}
+
+def execute_command(command):
+    """Executes a shell command and returns the result, start time, and end time."""
+    start = time.time()
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+    stdout, stderr = process.communicate()
+    end = time.time()
+    return process.returncode, start, end, stdout, stderr
+
+def check_db_query(connection, query, start_time, end_time):
+    """Executes a SQL query with start and end time parameters."""
+    cursor = connection.cursor()
+    cursor.execute(query, (start_time, end_time))
+    connection.commit()
+    results = cursor.fetchall()
+    cursor.close()
+    return results
+
+def convert_time_to_gmt(timestamp):
+    """Converts a UNIX timestamp to GMT timezone."""
+    gmt_timezone = pytz.timezone('GMT')
+    return datetime.fromtimestamp(timestamp, tz=pytz.utc).astimezone(gmt_timezone).strftime('%Y-%m-%d %H:%M:%S')
+
+def main(commands_queries):
+    """Executes commands one by one, checks for errors, and runs the corresponding SQL queries if successful."""
+    connection = pymssql.connect(**sql_config)
+
+    for cmd_key, cmd_info in commands_queries.items():
+        cmd = cmd_info['command']
+        queries = cmd_info['queries']
+
+        # Execute the command and capture the exit status
+        success, start_time, end_time, stdout, stderr = execute_command(cmd)
+
+        if success == 0:
+            print(f"{cmd_key} executed successfully.")
+            print(f"Command output: {stdout.decode().strip()}")
+            
+            start_time_dt = datetime.fromtimestamp(start_time).strftime('%Y-%m-%d %H:%M:%S')
+            end_time_dt = datetime.fromtimestamp(end_time).strftime('%Y-%m-%d %H:%M:%S')
+
+            start_time_gmt = convert_time_to_gmt(start_time)
+            end_time_gmt = convert_time_to_gmt(end_time)
+
+            # Execute corresponding SQL queries if the command was successful
+            for query in queries:
+                # If it's cmd1, use GMT times, otherwise use local times
+                if cmd_key == 'cmd1':
+                    results = check_db_query(connection, query, start_time_gmt, end_time_gmt)
+                else:
+                    results = check_db_query(connection, query, start_time_dt, end_time_dt)
+                
+                print(f"Query results for {cmd_key}: {results}")
+        else:
+            print(f"Command {cmd_key} failed with exit code {success}. Error: {stderr.decode().strip()}")
+            print(f"Skipping further execution of {cmd_key}.")
+            break
+
+    connection.close()
+
+# Key-value pair for commands and associated queries
+commands_queries = {
+    'cmd1': {
+        'command': r'C:\Temp\arrr.exe userhanenankatkan',
+        'queries': [
+            "SELECT * FROM ID, REQUESTSTATUS WHERE FEEDNAME='TRADESERVICEPHOENIXCASH' AND DATEREQUESTED BETWEEN %s AND %s"
+        ]
+    },
+    'cmd2': {
+        'command': r'C:\Temp\egujb.exe -userkane-ankita',
+        'queries': [
+            "SELECT COUNT(*) FROM ID, REQUESTSTATUS WHERE FEEDNAME='MATAHOMS' AND CREATEDDATE BETWEEN '2021-09-14 01:28:00' AND '2021-09-14 01:40:00'"
+        ]
+    },
+    'cmd3': {
+        'command': r'C:\Temp\third_command.exe -otherflags',
+        'queries': [
+            "SELECT * FROM ANOTHER_TABLE WHERE FEEDNAME='EXAMPLE' AND CREATEDDATE BETWEEN %s AND %s"
+        ]
+    }
+}
+
+# Run the main function with commands and queries as key-value pairs
+main(commands_queries)
