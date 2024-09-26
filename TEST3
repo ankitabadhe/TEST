@@ -1,7 +1,7 @@
 import time
 import pymssql
 import subprocess
-from datetime import datetime, timedelta
+from datetime import datetime
 import pytz
 
 # SQL connection config
@@ -80,6 +80,7 @@ def check_db_query(connection, query, start_time, end_time):
     start_query_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log_message(f"SQL Query Start Time: {start_query_time}")
 
+    # Execute the query with the injected start and end times
     cursor.execute(query, (start_time, end_time))
     connection.commit()
     results = cursor.fetchall()
@@ -98,6 +99,11 @@ def convert_time_to_gmt(timestamp):
     """Converts a UNIX timestamp to GMT timezone."""
     gmt_timezone = pytz.timezone('GMT')
     return datetime.fromtimestamp(timestamp, tz=pytz.utc).astimezone(gmt_timezone).strftime('%Y-%m-%d %H:%M:%S')
+
+def convert_time_to_ist(timestamp):
+    """Converts a UNIX timestamp to IST timezone."""
+    ist_timezone = pytz.timezone('Asia/Kolkata')
+    return datetime.fromtimestamp(timestamp, tz=pytz.utc).astimezone(ist_timezone).strftime('%Y-%m-%d %H:%M:%S')
 
 def main(commands_queries):
     """Executes commands one by one, checks for errors, and runs the corresponding SQL queries if successful."""
@@ -120,20 +126,18 @@ def main(commands_queries):
             log_message(f"\n{cmd_key} executed successfully.")
 
             # Convert start and end times
-            start_time_dt = datetime.fromtimestamp(start_time).strftime('%Y-%m-%d %H:%M:%S')
-            end_time_dt = datetime.fromtimestamp(end_time).strftime('%Y-%m-%d %H:%M:%S')
-
-            start_time_gmt = convert_time_to_gmt(start_time)
-            end_time_gmt = convert_time_to_gmt(end_time)
+            if cmd_key in ['cmd1', 'cmd3']:  # cmd1 and cmd3 use IST
+                start_time_dt = convert_time_to_ist(start_time)
+                end_time_dt = convert_time_to_ist(end_time)
+            else:  # cmd2 uses GMT
+                start_time_dt = convert_time_to_gmt(start_time)
+                end_time_dt = convert_time_to_gmt(end_time)
 
             # Execute corresponding SQL queries if the command was successful
             for query in queries:
                 log_message(f"Injecting command start ({start_time_dt}) and end ({end_time_dt}) times into the SQL query.")
                 
-                if cmd_key == 'cmd1':
-                    check_db_query(connection, query, start_time_gmt, end_time_gmt)
-                else:
-                    check_db_query(connection, query, start_time_dt, end_time_dt)
+                check_db_query(connection, query, start_time_dt, end_time_dt)
         else:
             log_message(f"\nCommand {cmd_key} failed or timed out. Moving to next command.")
             break
@@ -152,7 +156,7 @@ commands_queries = {
     'cmd2': {
         'command': r'C:\Temp\egujb.exe -userkane-ankita',
         'queries': [
-            "SELECT COUNT(*) FROM ID, REQUESTSTATUS WHERE FEEDNAME='MATAHOMS' AND CREATEDDATE BETWEEN '2021-09-14 01:28:00' AND '2021-09-14 01:40:00'"
+            "SELECT COUNT(*) FROM ID, REQUESTSTATUS WHERE FEEDNAME='MATAHOMS' AND CREATEDDATE BETWEEN %s AND %s"
         ],
         'timeout': 30  # 30 minutes timeout for cmd2
     },
