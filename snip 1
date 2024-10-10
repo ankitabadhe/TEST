@@ -1,0 +1,41 @@
+"""Executes a shell command with a specified timeout. Returns result, start time, and end time."""
+    log_message(f"Executing command: {command} with a timeout of {timeout_minutes} minutes.")
+    
+    # Log the start time
+    start = time.time()
+    start_dt = datetime.fromtimestamp(start).strftime('%Y-%m-%d %H:%M:%S')
+    log_message(f"Command Start Time: {start_dt}")
+
+    # Start the command and stream output in real time
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True, text=True)
+
+    # Capture output and monitor for timeout
+    try:
+        output = []
+        start_time = datetime.now()
+        for line in iter(process.stdout.readline, ''):
+            print(line, end='')  # Print the command's output line by line
+            output.append(line)
+
+            # Check if the command has exceeded the timeout
+            if (datetime.now() - start_time).total_seconds() > timeout_minutes * 60:
+                log_message(f"Command timeout reached after {timeout_minutes} minutes. Terminating command.")
+                process.terminate()
+                return -1, start, time.time()
+        
+        process.stdout.close()
+        returncode = process.wait()
+
+        # Log the end time
+        end = time.time()
+        end_dt = datetime.fromtimestamp(end).strftime('%Y-%m-%d %H:%M:%S')
+        total_time = end - start
+        log_message(f"Command End Time: {end_dt}")
+        log_message(f"Total Time Taken: {total_time:.2f} seconds")
+
+        return returncode, start, end
+
+    except subprocess.TimeoutExpired:
+        log_message(f"Command {command} exceeded the timeout of {timeout_minutes} minutes and was terminated.")
+        process.terminate()
+        return -1, start, time.time()
